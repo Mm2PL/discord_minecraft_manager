@@ -1,13 +1,12 @@
-
-from typing import Dict, List, Set, Tuple
-import aiohttp
-import aiofiles
-import aiofiles.os
+from typing import List, Set, Tuple
 import json
-import os
 import asyncio
 import shlex
 import uuid
+
+import aiohttp
+import aiofiles
+import aiofiles.os
 import discord
 from discord import Guild, Member, Object
 from discord.ext import commands
@@ -18,8 +17,10 @@ class MinecraftChannelCog(Cog, name='Registration'):
     MOJANG_API_UUID_ENDPOINT = 'https://api.mojang.com/profiles/minecraft'
     LP_USER_CMD_FMT = 'lp user {} parent {} {}'
 
+
     class MinecraftChannelHelpCommand(MinimalHelpCommand):
         CMD_HELP_FMT = '>>> __{name}__\nUsage: `{usage}`\nDescription: {desc}'
+
         def __init__(self, monitor_channel: str, **options):
             self._monitor_channel = monitor_channel
             super().__init__(**options)
@@ -36,7 +37,7 @@ class MinecraftChannelCog(Cog, name='Registration'):
         def add_command_formatting(self, command: Command):
             args = ['[{}]'.format(c) for c in command.clean_params]
             args = ' '.join(args)
-            usage = usage='{prefix}{name} {args}'.format(
+            usage = usage = '{prefix}{name} {args}'.format(
                 prefix=self.clean_prefix,
                 name=command.name,
                 args=args
@@ -47,9 +48,10 @@ class MinecraftChannelCog(Cog, name='Registration'):
                 desc=command.short_doc
             ))
 
-    def __init__(self, 
-                 bot: Bot, 
-                 monitor_channel: str, 
+
+    def __init__(self,
+                 bot: Bot,
+                 monitor_channel: str,
                  allowed_roles: Set[str],
                  minecraft_console_send_cmd: str,
                  minecraft_console_sub_cmd: Tuple[str, Tuple[str, str]],
@@ -90,8 +92,8 @@ class MinecraftChannelCog(Cog, name='Registration'):
         if self._working_discord_mc_mapping is None:
             async with aiofiles.open(self._discord_mc_map_file_path, 'r') as dc_mc_map:
                 dc_mc_map_content = await dc_mc_map.read()
-                self._working_discord_mc_mapping = json.loads(dc_mc_map_content)  
-        # start sub monitoring timer task
+                self._working_discord_mc_mapping = json.loads(dc_mc_map_content)
+                # start sub monitoring timer task
         await self._check_registered_sub_status()
 
     @commands.Cog.listener()
@@ -119,12 +121,12 @@ class MinecraftChannelCog(Cog, name='Registration'):
             command. Will be quoted.
         """
         # remove some control characters
-        text = text.replace('\r', '').replace('\n', '').replace('^','').replace('\\','')
+        text = text.replace('\r', '').replace('\n', '').replace('^', '').replace('\\', '')
         text = shlex.quote(text)
         # create subprocess to execute command to send to mc console
         handle = await asyncio.create_subprocess_shell(
-            self._minecraft_console_send_cmd + ' {}^M'.format(text), 
-            stdout=asyncio.subprocess.PIPE, 
+            self._minecraft_console_send_cmd + ' {}^M'.format(text),
+            stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
         # wait for command termination
@@ -281,6 +283,38 @@ class MinecraftChannelCog(Cog, name='Registration'):
                 await self._remove_user_from_whitelist(mc_user_uuid)
                 await member.remove_roles(Object(self._managed_role_id), reason=removal_reason)
             # TODO: send message in channel to unsubbed user?
+
+    @commands.command()
+    async def lookup_mc(self, ctx: Context, mc_username: str):
+        """Looks up a minecraft account, returns discord username, discriminator, id.
+
+        Args:
+            ctx (Context): the context of the lookup_mc command
+            mc_username (str): minecraft username to look up
+        """
+        account_owner_id = None
+        whitelist_entry = None
+        for k, v in self._working_discord_mc_mapping.items():
+            if v['name'].casefold() == mc_username.casefold():
+                whitelist_entry = v
+                account_owner_id = k
+                break
+        if not account_owner_id:
+            fmt = '<@!{}> {}: No Discord account linked, please check the spelling.'
+            await ctx.channel.send(fmt.format(ctx.message.author.id, mc_username))
+        else:
+            fmt = ('<@!{executor}>\n'
+                   '>>>Discord account: {target_username}#{target_discrim} ({target_id})\n'
+                   'Minecraft account: {mc_username} ({mc_uuid})')
+            target_discord = await self.bot.fetch_user(account_owner_id)
+            await ctx.channel.send(fmt.format(
+                executor=ctx.message.author.id,
+                target_username=target_discord.name,
+                target_discrim=target_discord.discriminator,
+                target_id=account_owner_id,
+                mc_username=mc_username,
+                mc_uuid=whitelist_entry['uuid']
+            ))
 
     @commands.command()
     async def register(self, ctx: Context, mc_username: str):
