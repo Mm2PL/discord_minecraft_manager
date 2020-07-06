@@ -283,6 +283,38 @@ class MinecraftChannelCog(Cog, name='Registration'):
             # TODO: send message in channel to unsubbed user?
 
     @commands.command()
+    async def lookup_mc(self, ctx: Context, mc_username: str):
+        """Looks up a minecraft account, returns discord username, discriminator, id.
+
+        Args:
+            ctx (Context): the context of the lookup_mc command
+            mc_username (str): minecraft username to look up
+        """
+        account_owner_id = None
+        whitelist_entry = None
+        for k, v in self._working_discord_mc_mapping.items():
+            if v['name'].casefold() == mc_username.casefold():
+                whitelist_entry = v
+                account_owner_id = k
+                break
+        if not account_owner_id:
+            fmt = '<@!{}> {}: No Discord account linked, please check the spelling.'
+            await ctx.channel.send(fmt.format(ctx.message.author.id, mc_username))
+        else:
+            fmt = ('<@!{executor}>\n'
+                   '>>>Discord account: {target_username}#{target_discrim} ({target_id})\n'
+                   'Minecraft account: {mc_username} ({mc_uuid})')
+            target_discord = await self.bot.fetch_user(account_owner_id)
+            await ctx.channel.send(fmt.format(
+                executor=ctx.message.author.id,
+                target_username=target_discord.name,
+                target_discrim=target_discord.discriminator,
+                target_id=account_owner_id,
+                mc_username=mc_username,
+                mc_uuid=whitelist_entry['uuid']
+            ))
+
+    @commands.command()
     async def register(self, ctx: Context, mc_username: str):
         """Registers a minecraft username to the server whitelist.
 
